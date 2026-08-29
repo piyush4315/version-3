@@ -95,10 +95,12 @@ body::before{content:'';position:fixed;inset:0;
 .nav-btn.active{color:var(--cyan);border-bottom-color:var(--cyan);background:transparent}
 .nav-btn svg{flex-shrink:0}
 .nav-btn .nbadge{margin-left:6px;background:rgba(0,245,255,.12);border:1px solid rgba(0,245,255,.25);color:var(--cyan);border-radius:99px;font-size:10px;padding:1px 7px}
-.toolbar-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 32px 12px}
-#topbar h1{font-size:15px;margin:0;color:var(--text);font-weight:700}
-#topbar p{margin:1px 0 0;font-size:11.5px;color:var(--muted)}
-.top-actions{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toolbar-row{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap;padding:10px 32px 12px}
+.toolbar-title{display:flex;flex-direction:column;gap:3px}
+#topbar h1{font-size:15px;margin:0;color:var(--text);font-weight:700;line-height:1.2}
+#topbar p{margin:0;font-size:11.5px;color:var(--muted);line-height:1.25}
+#topbar .toolbar-title p{order:-1;font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--cyan);opacity:.7;font-weight:700}
+.top-actions{align-self:center;margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 
 /* ── BUTTONS ── */
 .btn{
@@ -561,9 +563,9 @@ tbody tr.drill-target{outline:2px solid rgba(124,58,237,.55);outline-offset:-2px
         </button>
       </div>
       <div class="toolbar-row">
-        <div>
-          <h1 id="viewTitle">Dashboard</h1>
+        <div class="toolbar-title">
           <p id="viewSub">MSTC Combined Bid Sheet · Auctions 21977–21980</p>
+          <h1 id="viewTitle">Dashboard</h1>
         </div>
         <div class="top-actions">
           <button class="btn" id="undoBtn" title="Undo (Ctrl+Z)">↶ Undo <span class="count-pill" id="undoCount">0</span></button>
@@ -595,16 +597,28 @@ tbody tr.drill-target{outline:2px solid rgba(124,58,237,.55);outline-offset:-2px
             <div>
               <label>Group by</label>
               <select id="groupBy">
-                <option value="default" selected>Default — Cash Receivables (lot-wise)</option>
+                <option value="default">Default — Cash Receivables (lot-wise)</option>
                 <option value="buyer">Buyer</option>
                 <option value="auction">Auction</option>
                 <option value="lot_name">Material type</option>
                 <option value="unit">Unit</option>
+                <option value="settlement_group">Settlement group</option>
               </select>
             </div>
             <div>
               <label>Auction</label>
               <select id="auctionFilter"><option value="all">All auctions</option></select>
+            </div>
+            <div>
+              <label>Status</label>
+              <select id="settlementFilter">
+                <option value="all">All statuses</option>
+                <option value="Settled">Settled</option>
+                <option value="Unsettled">Unsettled</option>
+                <option value="Partially Settled">Partially Settled</option>
+                <option value="Only Settled">Only Settled</option>
+                <option value="Only Unsettled">Only Unsettled</option>
+              </select>
             </div>
             <div class="spacer"></div>
             <input type="text" id="search" placeholder="Search buyer, lot no, material..."/>
@@ -902,6 +916,35 @@ function recalcRow(r, changed) {
 function settlementStatus(r) {
   var n = numOr(r && (r.short_excess_payment !== undefined && r.short_excess_payment !== null ? r.short_excess_payment : r.outstanding));
   return Math.abs(n) <= 1 ? 'Settled' : 'Unsettled';
+}
+/* Five-bucket settlement grouping for Pivot Analytics.
+   "Settled" and "Only Settled" share the underlying condition (outstanding ≈ 0);
+   "Unsettled" and "Only Unsettled" share outstanding > 0. The duplicate labels
+   exist so the user can sort/filter under either naming — a fully paid lot will
+   appear under both "Settled" and "Only Settled", a partially paid lot will
+   appear under both "Unsettled" and "Partially Settled", and a fully unpaid
+   lot will appear under both "Unsettled" and "Only Unsettled". */
+function settlementGroup(r) {
+  var out = numOr(r && (r.outstanding !== undefined && r.outstanding !== null ? r.outstanding : (r.short_excess_payment !== undefined ? r.short_excess_payment : 0)));
+  var recd = numOr(r && r.total_received);
+  var tric = numOr(r && r.total_receivables);
+  if (Math.abs(out) <= 1) return 'Settled';
+  if (recd <= 0) return 'Unsettled';
+  if (recd > 0 && out > 1) return 'Partially Settled';
+  return 'Unsettled';
+}
+/* Return all settlement buckets this lot belongs to (overlapping labels). */
+function settlementGroups(r) {
+  var out = numOr(r && (r.outstanding !== undefined && r.outstanding !== null ? r.outstanding : (r.short_excess_payment !== undefined ? r.short_excess_payment : 0)));
+  var recd = numOr(r && r.total_received);
+  var groups = [];
+  if (Math.abs(out) <= 1) {
+    groups.push('Settled', 'Only Settled');
+  } else {
+    groups.push('Unsettled', 'Only Unsettled');
+    if (recd > 0 && out > 1) groups.push('Partially Settled');
+  }
+  return groups;
 }
 function settlementLabelHtml(r) {
   var st = settlementStatus(r);
@@ -2592,7 +2635,7 @@ var storage = (function () {
 })();
 
 var lots = [];
-var ui = { groupBy: 'default', auction: 'all', dashSearch: '', detailSearch: '', freezeDetailField: null };
+var ui = { groupBy: 'default', auction: 'all', settlement: 'all', dashSearch: '', detailSearch: '', freezeDetailField: null };
 var selectedGroup = null;
 var sortState = { table: 'pivot', key: null, dir: -1 };
 var view = 'dashboard';
@@ -2797,7 +2840,7 @@ function saveState() {
     customCols: customCols,
     colLayout: colLayout,
     gdriveClientId: gdriveClientId,
-    ui: { groupBy: ui.groupBy, auction: ui.auction, dashSearch: ui.dashSearch, detailSearch: ui.detailSearch, freezeDetailField: ui.freezeDetailField }
+    ui: { groupBy: ui.groupBy, auction: ui.auction, settlement: ui.settlement, dashSearch: ui.dashSearch, detailSearch: ui.detailSearch, freezeDetailField: ui.freezeDetailField }
   }));
   lastSaved = new Date();
   updateSaveIndicator();
@@ -2832,6 +2875,7 @@ function loadState() {
     if (data.ui) {
       ui.groupBy = data.ui.groupBy || 'buyer';
       ui.auction = data.ui.auction || 'all';
+      ui.settlement = data.ui.settlement || 'all';
       ui.dashSearch = data.ui.dashSearch || '';
       ui.detailSearch = data.ui.detailSearch || '';
       ui.freezeDetailField = data.ui.freezeDetailField || null;
@@ -2900,6 +2944,7 @@ function dashFilteredRows() {
   var q = ui.dashSearch.trim().toLowerCase();
   return lots.filter(function (r) {
     if (ui.auction !== 'all' && String(r.auction) !== ui.auction) return false;
+    if (ui.settlement !== 'all' && settlementGroups(r).indexOf(ui.settlement) === -1) return false;
     if (q) {
       var hay = (r.buyer + ' ' + r.lot_no + ' ' + r.lot_name + ' ' + r.auction).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
@@ -2910,7 +2955,10 @@ function dashFilteredRows() {
 function detailFilteredRows() {
   var q = ui.detailSearch.trim().toLowerCase();
   var rows = lots.slice();
-  if (selectedGroup) rows = rows.filter(function (r) { return String(r[selectedGroup.groupKey]) === selectedGroup.value; });
+  if (selectedGroup) rows = rows.filter(function (r) {
+    if (selectedGroup.groupKey === 'settlement_group') return settlementGroups(r).indexOf(selectedGroup.value) !== -1;
+    return String(r[selectedGroup.groupKey]) === selectedGroup.value;
+  });
   if (q) rows = rows.filter(function (r) {
     var hay = (r.buyer + ' ' + r.lot_no + ' ' + r.lot_name + ' ' + r.auction).toLowerCase();
     return hay.indexOf(q) !== -1;
@@ -3225,10 +3273,25 @@ function renderPivot() {
 
   var metricKeys = pivotMetricCols();
   var groups = {};
+  var keyExtractor = (groupKey === 'settlement_group')
+    ? function (r) { return settlementGroups(r); }
+    : function (r) { return [r[groupKey] === null || r[groupKey] === undefined ? '(blank)' : String(r[groupKey])]; };
   rows.forEach(function (r) {
-    var key = r[groupKey] === null || r[groupKey] === undefined ? '(blank)' : String(r[groupKey]);
-    (groups[key] = groups[key] || []).push(r);
+    var keys = keyExtractor(r);
+    for (var ki = 0; ki < keys.length; ki++) {
+      var key = keys[ki];
+      (groups[key] = groups[key] || []).push(r);
+    }
   });
+  if (groupKey === 'settlement_group') {
+    /* Always show the five buckets in the same left-to-right order so the
+       pivot is predictable regardless of which lots are present. */
+    var ORDER = ['Settled', 'Only Settled', 'Partially Settled', 'Unsettled', 'Only Unsettled'];
+    var ordered = {};
+    ORDER.forEach(function (k) { if (groups[k]) ordered[k] = groups[k]; });
+    Object.keys(groups).forEach(function (k) { if (ordered[k] === undefined) ordered[k] = groups[k]; });
+    groups = ordered;
+  }
   var pivotRows = Object.keys(groups).map(function (key) {
     var grp = groups[key];
     var out = { key: key, lots: grp.length };
@@ -3252,11 +3315,20 @@ function renderPivot() {
   if (sortState.table === 'pivot' && sortState.key && sortState.key !== 'key') {
     pivotRows = sortRows(pivotRows, sortState.key, sortState.dir);
   } else if (sortState.table === 'pivot' && sortState.key === 'key') {
-    pivotRows = sortRows(pivotRows, 'key', sortState.dir);
+    if (groupKey === 'settlement_group') {
+      var SORDER = { 'Settled': 0, 'Only Settled': 1, 'Partially Settled': 2, 'Unsettled': 3, 'Only Unsettled': 4 };
+      pivotRows = pivotRows.slice().sort(function (a, b) {
+        var ai = SORDER[a.key] !== undefined ? SORDER[a.key] : 99;
+        var bi = SORDER[b.key] !== undefined ? SORDER[b.key] : 99;
+        return sortState.dir * (ai - bi);
+      });
+    } else {
+      pivotRows = sortRows(pivotRows, 'key', sortState.dir);
+    }
   } else {
     pivotRows = sortRows(pivotRows, metricKeys.indexOf('total_receivables') !== -1 ? 'total_receivables' : metricKeys[0], -1);
   }
-  var groupLabel = { buyer: 'Buyer', auction: 'Auction', lot_name: 'Material type', unit: 'Unit' }[groupKey];
+  var groupLabel = { buyer: 'Buyer', auction: 'Auction', lot_name: 'Material type', unit: 'Unit', settlement_group: 'Settlement group' }[groupKey];
   thead.innerHTML = '<tr><th class="left" data-field="key" data-table="pivot">' + escHtml(groupLabel) +
     (sortState.table === 'pivot' && sortState.key === 'key' ? ' <span class="arrow">' + (sortState.dir === 1 ? '▲' : '▼') + '</span>' : '') +
     '</th>' + metricKeys.map(function (f, i) { return thPickerHtml(f, 'pivot', i, 'pivotMetric'); }).join('') + '</tr>';
@@ -3386,7 +3458,7 @@ function renderDetailInto(tableId, countId) {
   var tbody = table.querySelector('tbody');
   tbody.innerHTML = rows.map(function (r) {
     var li = lots.indexOf(r);
-    var isHit = selectedGroup && String(r[selectedGroup.groupKey]) === selectedGroup.value;
+    var isHit = selectedGroup && (selectedGroup.groupKey === 'settlement_group' ? settlementGroups(r).indexOf(selectedGroup.value) !== -1 : String(r[selectedGroup.groupKey]) === selectedGroup.value);
     return '<tr data-lot="' + li + '" class="' + (isHit ? 'selected drill-target' : '') + (settlementStatus(r) === 'Settled' ? ' settled' : '') + '">' + cols.map(function (f) {
       var v = getLotField(r, f);
       var kind = fieldKind(f);
@@ -4761,6 +4833,7 @@ function init() {
   buildStaticUI();
   document.getElementById('groupBy').value = ui.groupBy || 'default';
   document.getElementById('auctionFilter').value = ui.auction || 'all';
+  document.getElementById('settlementFilter').value = ui.settlement || 'all';
   document.getElementById('search').value = ui.dashSearch || '';
   document.getElementById('detailSearch').value = ui.detailSearch || '';
 
@@ -4773,6 +4846,7 @@ function init() {
     renderAll(); saveState();
   });
   document.getElementById('auctionFilter').addEventListener('change', function (e) { ui.auction = e.target.value; renderAll(); saveState(); });
+  document.getElementById('settlementFilter').addEventListener('change', function (e) { ui.settlement = e.target.value; renderAll(); saveState(); });
   document.getElementById('search').addEventListener('input', function (e) { ui.dashSearch = e.target.value; renderCards(); renderPivot(); saveState(); });
   document.getElementById('detailSearch').addEventListener('input', function (e) { ui.detailSearch = e.target.value; renderDetail(); saveState(); });
   document.getElementById('clearDetail').addEventListener('click', function () {
