@@ -3267,11 +3267,23 @@ function renderPivot() {
       metricKeys.map(function (f) {
         if (f === 'lots') return '<td>' + r.lots + '</td>';
         if (f === 'settled_breakdown') {
-          var sLbl = r.settled === 0 ? 'Settled' : (r.settled + ' S');
-          var uLbl = r.unsettled === 0 ? 'Unsettled' : (r.unsettled + ' U');
+          /* Rule:
+             - 0 settled, N unsettled -> show ONLY a pink "Unsettled" pill (full word)
+             - N settled, 0 unsettled -> show ONLY a green "Settled" pill (full word)
+             - both > 0               -> show both as "N S" (green) + "M U" (pink)
+             - both 0 (empty group)   -> show ONLY a pink "Unsettled" pill (full word) */
+          var cells = '';
+          if (r.settled > 0 && r.unsettled > 0) {
+            cells = '<span class="seg s">' + r.settled + ' S</span>' +
+                    '<span class="seg u">' + r.unsettled + ' U</span>';
+          } else if (r.settled === 0) {
+            cells = '<span class="seg u zero">Unsettled</span>';
+          } else {
+            /* r.unsettled === 0, r.settled > 0 */
+            cells = '<span class="seg s zero">Settled</span>';
+          }
           return '<td class="status" data-field="settled_breakdown"><span class="settled-counts" title="Settled ' + r.settled + ' / Unsettled ' + r.unsettled + ' of ' + r.lots + ' lots">' +
-            '<span class="seg s' + (r.settled === 0 ? ' zero' : '') + '">' + sLbl + '</span>' +
-            '<span class="seg u' + (r.unsettled === 0 ? ' zero' : '') + '">' + uLbl + '</span>' +
+            cells +
           '</span></td>';
         }
         var v = r[f];
@@ -3284,11 +3296,17 @@ function renderPivot() {
     if (f === 'settled_breakdown') {
       var ts = pivotRows.reduce(function (a, r) { return a + r.settled; }, 0);
       var tu = pivotRows.reduce(function (a, r) { return a + r.unsettled; }, 0);
-      var tsLbl = ts === 0 ? 'Settled' : (ts + ' S');
-      var tuLbl = tu === 0 ? 'Unsettled' : (tu + ' U');
+      var totCells = '';
+      if (ts > 0 && tu > 0) {
+        totCells = '<span class="seg s">' + ts + ' S</span>' +
+                   '<span class="seg u">' + tu + ' U</span>';
+      } else if (ts === 0) {
+        totCells = '<span class="seg u zero">Unsettled</span>';
+      } else {
+        totCells = '<span class="seg s zero">Settled</span>';
+      }
       return '<td class="status" data-field="settled_breakdown"><span class="settled-counts" title="Settled ' + ts + ' / Unsettled ' + tu + ' of all lots">' +
-        '<span class="seg s' + (ts === 0 ? ' zero' : '') + '">' + tsLbl + '</span>' +
-        '<span class="seg u' + (tu === 0 ? ' zero' : '') + '">' + tuLbl + '</span>' +
+        totCells +
       '</span></td>';
     }
     return '<td>' + inr(sumField(pivotRows, f)) + '</td>';
