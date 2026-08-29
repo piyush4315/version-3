@@ -605,23 +605,11 @@ tbody tr.drill-target{outline:2px solid rgba(124,58,237,.55);outline-offset:-2px
                 <option value="auction">Auction</option>
                 <option value="lot_name">Material type</option>
                 <option value="unit">Unit</option>
-                <option value="settlement_group">Settlement group</option>
               </select>
             </div>
             <div>
               <label>Auction</label>
               <select id="auctionFilter"><option value="all">All auctions</option></select>
-            </div>
-            <div>
-              <label>Status</label>
-              <select id="settlementFilter">
-                <option value="all">All statuses</option>
-                <option value="Settled">Settled</option>
-                <option value="Unsettled">Unsettled</option>
-                <option value="Partially Settled">Partially Settled</option>
-                <option value="Only Settled">Only Settled</option>
-                <option value="Only Unsettled">Only Unsettled</option>
-              </select>
             </div>
             <div class="spacer"></div>
             <input type="text" id="search" placeholder="Search buyer, lot no, material..."/>
@@ -2916,7 +2904,9 @@ function loadState() {
     if (data.ui) {
       ui.groupBy = data.ui.groupBy || 'buyer';
       ui.auction = data.ui.auction || 'all';
-      ui.settlement = data.ui.settlement || 'all';
+      /* Settlement filter was removed — always treat as 'all' regardless of
+         what older saves have stored. */
+      ui.settlement = 'all';
       ui.dashSearch = data.ui.dashSearch || '';
       ui.detailSearch = data.ui.detailSearch || '';
       ui.freezeDetailField = data.ui.freezeDetailField || null;
@@ -3268,12 +3258,8 @@ function renderPivot() {
   var tbody = document.querySelector('#pivotTable tbody');
   var tfoot = document.querySelector('#pivotTable tfoot');
   document.getElementById('pivotHint').textContent = groupKey === 'default'
-    ? ((ui.settlement === 'Settled' || ui.settlement === 'Unsettled')
-        ? 'Default lot-wise view, Status = ' + ui.settlement + ': the selected bucket is pinned to the top and the opposite bucket is pinned to the bottom (each block still sorted by Total Receivables desc). Click a column header to sort. Use ▾ on a header to pick which field sits in that column.'
-        : 'Default cash-receivables view — one row per lot. Click a buyer/row to show every lot of that buyer below. Click a column header to sort. Use ▾ on a header to pick which field sits in that column.')
-    : (groupKey === 'settlement_group' && (ui.settlement === 'Settled' || ui.settlement === 'Unsettled')
-      ? 'Status = ' + ui.settlement + ': every lot is shown, with the selected bucket pinned to the top and the opposite bucket pinned to the bottom. Click a row to drill down.'
-      : 'Click a buyer (or any group row) to show all of its lots below on this page. Click again to clear. Click a column header to sort. Use ▾ on a header to pick which metric sits in that column.');
+    ? 'Default cash-receivables view — one row per lot. Click a buyer/row to show every lot of that buyer below. Click a column header to sort. Use ▾ on a header to pick which field sits in that column.'
+    : 'Click a buyer (or any group row) to show all of its lots below on this page. Click again to clear. Click a column header to sort. Use ▾ on a header to pick which metric sits in that column.';
 
   if (groupKey === 'default') {
     var cols = pivotLotCols();
@@ -4960,10 +4946,12 @@ function init() {
   ensureGstTdsRateColumn();
   /* Buyer is the product default; replace older saved default grouping. */
   if (!loaded || ui.groupBy === 'default') ui.groupBy = 'buyer';
+  /* Older saves may have stored 'settlement_group' as a groupBy — that option
+     has been removed. Fall back to 'buyer' so the user still sees their data. */
+  if (ui.groupBy === 'settlement_group') ui.groupBy = 'buyer';
   buildStaticUI();
   document.getElementById('groupBy').value = ui.groupBy || 'default';
   document.getElementById('auctionFilter').value = ui.auction || 'all';
-  document.getElementById('settlementFilter').value = ui.settlement || 'all';
   document.getElementById('search').value = ui.dashSearch || '';
   document.getElementById('detailSearch').value = ui.detailSearch || '';
 
@@ -4976,7 +4964,6 @@ function init() {
     renderAll(); saveState();
   });
   document.getElementById('auctionFilter').addEventListener('change', function (e) { ui.auction = e.target.value; renderAll(); saveState(); });
-  document.getElementById('settlementFilter').addEventListener('change', function (e) { ui.settlement = e.target.value; renderAll(); saveState(); });
   document.getElementById('search').addEventListener('input', function (e) { ui.dashSearch = e.target.value; renderCards(); renderPivot(); saveState(); });
   document.getElementById('detailSearch').addEventListener('input', function (e) { ui.detailSearch = e.target.value; renderDetail(); saveState(); });
   document.getElementById('clearDetail').addEventListener('click', function () {
