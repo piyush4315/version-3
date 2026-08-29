@@ -246,14 +246,14 @@ table th[data-field="doc_invoice_date"],table td[data-field="doc_invoice_date"]{
 table th[data-field="total_received"],table td[data-field="total_received"]{min-width:100px}
 table th[data-field="outstanding"],table td[data-field="outstanding"]{min-width:88px}
 table th[data-field="invoice_link"],table td[data-field="invoice_link"]{min-width:84px}
-table th[data-field="settled_breakdown"],table td[data-field="settled_breakdown"]{min-width:140px}
+table th[data-field="settled_breakdown"],table td[data-field="settled_breakdown"]{min-width:130px}
 .settled-counts{display:inline-flex;align-items:center;gap:4px;justify-content:flex-end;width:100%}
 .settled-counts .seg{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 7px;line-height:1.1;white-space:nowrap}
-.settled-counts .seg.s{background:linear-gradient(135deg,#10b981 0%,#22c55e 100%);color:#fff;box-shadow:0 0 10px rgba(34,197,94,.5)}
-.settled-counts .seg.u{background:#f72585;color:#fff;box-shadow:0 0 8px rgba(247,37,133,.35)}
-.settled-counts .seg.zero{opacity:.5;background:rgba(255,255,255,.08);color:var(--dim);box-shadow:none;text-shadow:none}
-.settled-counts .seg.zero.s{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.4)}
-.settled-counts .seg.zero.u{background:rgba(247,37,133,.15);color:#f9a8d4;border:1px solid rgba(247,37,133,.4)}
+.settled-counts .seg.s{background:linear-gradient(135deg,#10b981 0%,#22c55e 100%);color:#fff;box-shadow:0 0 14px rgba(34,197,94,.55),inset 0 0 0 1px rgba(167,243,208,.55)}
+.settled-counts .seg.u{background:#f72585;color:#fff;box-shadow:0 0 12px rgba(247,37,133,.35)}
+/* Full-word pill (used when the opposite side is 0): keep the same colour as the
+   corresponding count chip; just widen padding for the longer label */
+.settled-counts .seg.zero{padding:2px 11px;letter-spacing:.6px}
 td.left{text-align:left;font-weight:600}
 td.strong{font-weight:700;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:10.5px}
 td.pos{color:#f9a8d4;font-weight:600}
