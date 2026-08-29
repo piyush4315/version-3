@@ -165,7 +165,8 @@ option{background:#0d0d24;color:var(--text)}
 table{border-collapse:collapse;width:100%;font-size:11.5px;font-variant-numeric:tabular-nums;min-width:600px}
 table.lots-table{border-collapse:separate;border-spacing:0}
 table thead th, table tbody td, table tfoot td{white-space:normal;word-break:break-word;line-height:1.25;overflow-wrap:break-word;hyphens:auto}
-table thead th .th-wrap, table thead th .arrow, table thead th .th-pick, table thead th .th-freeze{white-space:nowrap}
+table thead th .arrow, table thead th .th-pick, table thead th .th-freeze{white-space:nowrap;display:inline-block}
+table thead th .th-wrap{white-space:normal}
 table tbody td.num, table tbody td.strong, table tbody td.pos, table tbody td.neg, table tbody td.zero, table tbody td.status, table tbody td.date, table tfoot td{white-space:nowrap;word-break:normal;overflow-wrap:normal;hyphens:manual}
 thead th{
   position:sticky;top:0;z-index:2;background:rgba(0,0,0,.55);
@@ -416,7 +417,10 @@ tr:hover .rowedit,tr:hover .rowdel{opacity:1}
 .detail-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px}
 .detail-header h2{margin:0}
 .toolbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.th-wrap{display:inline-flex;align-items:center;gap:4px}
+.th-wrap{display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end;line-height:1.15}
+thead th.left .th-wrap{justify-content:flex-start}
+.th-wrap .th-label{flex:0 1 auto;min-width:0;word-break:break-word;overflow-wrap:break-word}
+.th-wrap .th-freeze,.th-wrap .th-pick,.th-wrap .arrow{flex:0 0 auto}
 .th-pick{
   border:0;background:transparent;color:var(--dim);cursor:pointer;font-size:10px;
   padding:0 2px;border-radius:4px;line-height:1
@@ -3110,10 +3114,11 @@ function thPickerHtml(field, table, place, layoutKind) {
     ? '<button type="button" class="th-freeze' + (frozenOn ? ' on' : '') + '" data-freeze="' + escHtml(field) + '" title="Freeze panes at this column (keeps this and all columns to the left visible while scrolling). Click again to unfreeze.">' + (frozenOn ? '⊣' : '⊢') + '</button>'
     : '';
   return '<th class="' + cls + '" data-field="' + escHtml(field) + '" data-table="' + table + '" data-place="' + place + '" data-layout="' + layoutKind + '">' +
-    '<span class="th-wrap">' + escHtml(fieldLabel(field)) +
-    freezeBtn +
-    '<button type="button" class="th-pick" data-place="' + place + '" data-layout="' + layoutKind + '" data-current="' + escHtml(field) + '" title="Choose which field shows in this column">▾</button>' +
-    (arrow ? '<span class="arrow">' + arrow + '</span>' : '') +
+    '<span class="th-wrap">' +
+      '<span class="th-label">' + escHtml(fieldLabel(field)) + '</span>' +
+      freezeBtn +
+      '<button type="button" class="th-pick" data-place="' + place + '" data-layout="' + layoutKind + '" data-current="' + escHtml(field) + '" title="Choose which field shows in this column">▾</button>' +
+      (arrow ? '<span class="arrow">' + arrow + '</span>' : '') +
     '</span></th>';
 }
 function formatCellValue(r, key) {
