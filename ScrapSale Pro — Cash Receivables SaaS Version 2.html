@@ -246,12 +246,14 @@ table th[data-field="doc_invoice_date"],table td[data-field="doc_invoice_date"]{
 table th[data-field="total_received"],table td[data-field="total_received"]{min-width:100px}
 table th[data-field="outstanding"],table td[data-field="outstanding"]{min-width:88px}
 table th[data-field="invoice_link"],table td[data-field="invoice_link"]{min-width:84px}
-table th[data-field="settled_breakdown"],table td[data-field="settled_breakdown"]{min-width:120px}
+table th[data-field="settled_breakdown"],table td[data-field="settled_breakdown"]{min-width:140px}
 .settled-counts{display:inline-flex;align-items:center;gap:4px;justify-content:flex-end;width:100%}
-.settled-counts .seg{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 7px;line-height:1.1}
+.settled-counts .seg{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 7px;line-height:1.1;white-space:nowrap}
 .settled-counts .seg.s{background:linear-gradient(135deg,#10b981 0%,#22c55e 100%);color:#fff;box-shadow:0 0 10px rgba(34,197,94,.5)}
 .settled-counts .seg.u{background:#f72585;color:#fff;box-shadow:0 0 8px rgba(247,37,133,.35)}
-.settled-counts .seg.zero{opacity:.4;background:rgba(255,255,255,.08);color:var(--dim);box-shadow:none}
+.settled-counts .seg.zero{opacity:.5;background:rgba(255,255,255,.08);color:var(--dim);box-shadow:none;text-shadow:none}
+.settled-counts .seg.zero.s{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.4)}
+.settled-counts .seg.zero.u{background:rgba(247,37,133,.15);color:#f9a8d4;border:1px solid rgba(247,37,133,.4)}
 td.left{text-align:left;font-weight:600}
 td.strong{font-weight:700;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:10.5px}
 td.pos{color:#f9a8d4;font-weight:600}
@@ -3265,9 +3267,11 @@ function renderPivot() {
       metricKeys.map(function (f) {
         if (f === 'lots') return '<td>' + r.lots + '</td>';
         if (f === 'settled_breakdown') {
+          var sLbl = r.settled === 0 ? 'Settled' : (r.settled + ' S');
+          var uLbl = r.unsettled === 0 ? 'Unsettled' : (r.unsettled + ' U');
           return '<td class="status" data-field="settled_breakdown"><span class="settled-counts" title="Settled ' + r.settled + ' / Unsettled ' + r.unsettled + ' of ' + r.lots + ' lots">' +
-            '<span class="seg s' + (r.settled === 0 ? ' zero' : '') + '">' + r.settled + ' S</span>' +
-            '<span class="seg u' + (r.unsettled === 0 ? ' zero' : '') + '">' + r.unsettled + ' U</span>' +
+            '<span class="seg s' + (r.settled === 0 ? ' zero' : '') + '">' + sLbl + '</span>' +
+            '<span class="seg u' + (r.unsettled === 0 ? ' zero' : '') + '">' + uLbl + '</span>' +
           '</span></td>';
         }
         var v = r[f];
@@ -3280,9 +3284,11 @@ function renderPivot() {
     if (f === 'settled_breakdown') {
       var ts = pivotRows.reduce(function (a, r) { return a + r.settled; }, 0);
       var tu = pivotRows.reduce(function (a, r) { return a + r.unsettled; }, 0);
-      return '<td class="status" data-field="settled_breakdown"><span class="settled-counts">' +
-        '<span class="seg s' + (ts === 0 ? ' zero' : '') + '">' + ts + ' S</span>' +
-        '<span class="seg u' + (tu === 0 ? ' zero' : '') + '">' + tu + ' U</span>' +
+      var tsLbl = ts === 0 ? 'Settled' : (ts + ' S');
+      var tuLbl = tu === 0 ? 'Unsettled' : (tu + ' U');
+      return '<td class="status" data-field="settled_breakdown"><span class="settled-counts" title="Settled ' + ts + ' / Unsettled ' + tu + ' of all lots">' +
+        '<span class="seg s' + (ts === 0 ? ' zero' : '') + '">' + tsLbl + '</span>' +
+        '<span class="seg u' + (tu === 0 ? ' zero' : '') + '">' + tuLbl + '</span>' +
       '</span></td>';
     }
     return '<td>' + inr(sumField(pivotRows, f)) + '</td>';
