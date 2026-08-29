@@ -913,24 +913,29 @@ function recalcRow(r, changed) {
   r.short_excess_payment = r.outstanding;
   r.settlement_status = settlementStatus(r);
 }
+/* Settlement tolerance: a lot is considered Settled if its outstanding is
+   at most SETTLEMENT_TOLERANCE short (i.e. a small under-payment is
+   forgiven). Any excess (over-payment, outstanding < 0) also counts as
+   Settled — receiving more than the total receivables is never a reason
+   to mark the lot Unsettled. */
+var SETTLEMENT_TOLERANCE = 5;
 function settlementStatus(r) {
   var n = numOr(r && (r.short_excess_payment !== undefined && r.short_excess_payment !== null ? r.short_excess_payment : r.outstanding));
-  return Math.abs(n) <= 1 ? 'Settled' : 'Unsettled';
+  return n <= SETTLEMENT_TOLERANCE ? 'Settled' : 'Unsettled';
 }
 /* Five-bucket settlement grouping for Pivot Analytics.
-   "Settled" and "Only Settled" share the underlying condition (outstanding ≈ 0);
-   "Unsettled" and "Only Unsettled" share outstanding > 0. The duplicate labels
-   exist so the user can sort/filter under either naming — a fully paid lot will
-   appear under both "Settled" and "Only Settled", a partially paid lot will
-   appear under both "Unsettled" and "Partially Settled", and a fully unpaid
+   "Settled" and "Only Settled" share the underlying condition (outstanding <= tolerance);
+   "Unsettled" and "Only Unsettled" share outstanding > tolerance. The duplicate
+   labels exist so the user can sort/filter under either naming — a fully paid
+   lot will appear under both "Settled" and "Only Settled", a partially paid lot
+   will appear under both "Unsettled" and "Partially Settled", and a fully unpaid
    lot will appear under both "Unsettled" and "Only Unsettled". */
 function settlementGroup(r) {
   var out = numOr(r && (r.outstanding !== undefined && r.outstanding !== null ? r.outstanding : (r.short_excess_payment !== undefined ? r.short_excess_payment : 0)));
   var recd = numOr(r && r.total_received);
-  var tric = numOr(r && r.total_receivables);
-  if (Math.abs(out) <= 1) return 'Settled';
+  if (out <= SETTLEMENT_TOLERANCE) return 'Settled';
   if (recd <= 0) return 'Unsettled';
-  if (recd > 0 && out > 1) return 'Partially Settled';
+  if (recd > 0 && out > SETTLEMENT_TOLERANCE) return 'Partially Settled';
   return 'Unsettled';
 }
 /* Return all settlement buckets this lot belongs to (overlapping labels). */
@@ -938,11 +943,11 @@ function settlementGroups(r) {
   var out = numOr(r && (r.outstanding !== undefined && r.outstanding !== null ? r.outstanding : (r.short_excess_payment !== undefined ? r.short_excess_payment : 0)));
   var recd = numOr(r && r.total_received);
   var groups = [];
-  if (Math.abs(out) <= 1) {
+  if (out <= SETTLEMENT_TOLERANCE) {
     groups.push('Settled', 'Only Settled');
   } else {
     groups.push('Unsettled', 'Only Unsettled');
-    if (recd > 0 && out > 1) groups.push('Partially Settled');
+    if (recd > 0 && out > SETTLEMENT_TOLERANCE) groups.push('Partially Settled');
   }
   return groups;
 }
@@ -1176,7 +1181,7 @@ var XLSX_COLS = [
   ['fp_received', 'Final Payment (Received)', 'n'],
   ['fp_date', 'Date of Receipt', 's'],
   ['short_excess_payment', 'Short/(Excess) Payment', 'f:+S{r}-U{r}-X{r}'],
-  ['settlement_status', 'Settled / Unsettled', 'f:IF(ABS(Z{r})<=1,"Settled","Unsettled")'],
+  ['settlement_status', 'Settled / Unsettled', 'f:IF(Z{r}<=5,"Settled","Unsettled")'],
   ['invoice_no', 'Invoice No. ', 's'],
   ['sap_document_date', 'SAP Document', 's'],
   ['doc_invoice_date', 'Doc./Invoice Date', 's']
@@ -1418,7 +1423,7 @@ function buildWorkingSheetXml(lots) {
       cellFormula('L' + n, 'E' + n + '-G' + n + '-J' + n, r.short_excess_payment, 13) +
       (function () {
         var st = settlementStatus(r);
-        return '<c r="M' + n + '" t="str" s="' + (st === 'Settled' ? '18' : '19') + '"><f>IF(ABS(L' + n + ')&lt;=1,"Settled","Unsettled")</f><v>' + escXml(st) + '</v></c>';
+        return '<c r="M' + n + '" t="str" s="' + (st === 'Settled' ? '18' : '19') + '"><f>IF(L' + n + '&lt;=5,"Settled","Unsettled")</f><v>' + escXml(st) + '</v></c>';
       })();
     rows.push('<row r="' + n + '">' + cells + '</row>');
   });
@@ -3292,7 +3297,7 @@ function renderPivot() {
 
   function bucketFor(r) {
     if (twoBucketFilter) {
-      return [Math.abs(numOr(r && r.outstanding)) <= 1 ? pinnedBucket : (pinnedBucket === 'Settled' ? 'Unsettled' : 'Settled')];
+      return [numOr(r && r.outstanding) <= SETTLEMENT_TOLERANCE ? pinnedBucket : (pinnedBucket === 'Settled' ? 'Unsettled' : 'Settled')];
     }
     if (isSettlementView) {
       if (ui.settlement !== 'all' && (ui.settlement === 'Partially Settled' || ui.settlement === 'Only Settled' || ui.settlement === 'Only Unsettled')) {
@@ -3367,7 +3372,7 @@ function renderPivot() {
     '</th>' + metricKeys.map(function (f, i) { return thPickerHtml(f, 'pivot', i, 'pivotMetric'); }).join('') + '</tr>';
   tbody.innerHTML = pivotRows.map(function (r) {
     var isSelected = selectedGroup && selectedGroup.groupKey === groupKey && selectedGroup.value === r.key;
-    return '<tr class="' + (isSelected ? 'selected' : '') + (Math.abs(numOr(r.outstanding)) <= 1 ? ' settled' : '') + '" data-group="' + groupKey + '" data-value="' + encodeURIComponent(r.key) + '">' +
+    return '<tr class="' + (isSelected ? 'selected' : '') + (numOr(r.outstanding) <= SETTLEMENT_TOLERANCE ? ' settled' : '') + '" data-group="' + groupKey + '" data-value="' + encodeURIComponent(r.key) + '">' +
       '<td class="left">' + escHtml(r.key) + '</td>' +
       metricKeys.map(function (f) {
         if (f === 'lots') return '<td>' + r.lots + '</td>';
