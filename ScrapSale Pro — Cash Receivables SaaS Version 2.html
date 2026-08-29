@@ -161,13 +161,18 @@ option{background:#0d0d24;color:var(--text)}
   overflow-x:auto;overflow-y:hidden;border:1px solid rgba(255,255,255,.06);border-radius:13px;max-height:none;
   -webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;max-width:100%
 }
-table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap;font-variant-numeric:tabular-nums;min-width:600px}
+.table-wrap>table{margin:0;border-spacing:0}
+table{border-collapse:collapse;width:100%;font-size:11.5px;font-variant-numeric:tabular-nums;min-width:600px}
 table.lots-table{border-collapse:separate;border-spacing:0}
+table thead th, table tbody td, table tfoot td{white-space:normal;word-break:break-word;line-height:1.25;overflow-wrap:break-word;hyphens:auto}
+table thead th .th-wrap, table thead th .arrow, table thead th .th-pick, table thead th .th-freeze{white-space:nowrap}
+table tbody td.num, table tbody td.strong, table tbody td.pos, table tbody td.neg, table tbody td.zero, table tbody td.status, table tbody td.date, table tfoot td{white-space:nowrap;word-break:normal;overflow-wrap:normal;hyphens:manual}
 thead th{
   position:sticky;top:0;z-index:2;background:rgba(0,0,0,.55);
-  text-align:right;padding:11px 13px;font-weight:700;color:var(--dim);font-size:9px;
-  letter-spacing:1.5px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.06);
-  cursor:pointer;user-select:none;font-family:'Inter',sans-serif
+  text-align:right;padding:8px 8px 7px;font-weight:700;color:var(--dim);font-size:8.5px;
+  letter-spacing:1px;text-transform:uppercase;border-bottom:1px solid rgba(255,255,255,.06);
+  cursor:pointer;user-select:none;font-family:'Inter',sans-serif;vertical-align:bottom;
+  min-width:54px
 }
 thead th.left{text-align:left}
 thead th.nosort{cursor:default}
@@ -197,7 +202,7 @@ td.rng-anchor{outline:2px solid var(--cyan);outline-offset:-2px}
   font-size:11.5px;font-weight:600;padding:6px 10px;border-radius:10px;display:none;
   backdrop-filter:blur(20px);box-shadow:0 6px 18px rgba(0,0,0,.35)
 }
-tbody td{padding:10px 13px;border-bottom:1px solid rgba(255,255,255,.025);text-align:right;color:#cbd5e1;vertical-align:middle}
+tbody td{padding:7px 8px;border-bottom:1px solid rgba(255,255,255,.025);text-align:right;color:#cbd5e1;vertical-align:middle;font-size:11.5px}
 tbody tr{transition:background .12s,color .18s}
 tbody tr:hover{background:rgba(0,245,255,.025)}
 tbody tr.selected{background:rgba(124,58,237,.08)}
@@ -206,23 +211,57 @@ tbody tr.settled td,tbody tr.settled td.left,tbody tr.settled td.strong,tbody tr
   text-shadow:none;
 }
 tbody tr.settled td.edit input{color:#b5d99c}
+/* Per-field column width hints so columns sit close together */
+table th[data-field="qty"],table td[data-field="qty"]{min-width:50px;width:auto}
+table th[data-field="rate"],table td[data-field="rate"]{min-width:68px}
+table th[data-field="unit"],table td[data-field="unit"]{min-width:46px}
+table th[data-field="auction"],table td[data-field="auction"]{min-width:64px}
+table th[data-field="lot_no"],table td[data-field="lot_no"]{min-width:58px}
+table th[data-field="buyer"],table td[data-field="buyer"]{min-width:140px}
+table th[data-field="lot_name"],table td[data-field="lot_name"]{min-width:130px}
+table th[data-field="mat_value"],table td[data-field="mat_value"]{min-width:88px}
+table th[data-field="gst"],table td[data-field="gst"]{min-width:62px}
+table th[data-field="mat_value_plus_gst"],table td[data-field="mat_value_plus_gst"]{min-width:108px}
+table th[data-field="tcs"],table td[data-field="tcs"]{min-width:62px}
+table th[data-field="tds194o"],table td[data-field="tds194o"]{min-width:78px}
+table th[data-field="service_charge_mstc"],table td[data-field="service_charge_mstc"]{min-width:96px}
+table th[data-field="tds194h"],table td[data-field="tds194h"]{min-width:84px}
+table th[data-field="net_service_charge"],table td[data-field="net_service_charge"]{min-width:108px}
+table th[data-field="service_charge_to_mstc"],table td[data-field="service_charge_to_mstc"]{min-width:96px}
+table th[data-field="gst_tds_rate"],table td[data-field="gst_tds_rate"]{min-width:72px}
+table th[data-field="gst_tds"],table td[data-field="gst_tds"]{min-width:70px}
+table th[data-field="total_receivables"],table td[data-field="total_receivables"]{min-width:120px}
+table th[data-field="sd_expected"],table td[data-field="sd_expected"]{min-width:96px}
+table th[data-field="sd_received"],table td[data-field="sd_received"]{min-width:96px}
+table th[data-field="sd_date"],table td[data-field="sd_date"]{min-width:96px}
+table th[data-field="fp_expected"],table td[data-field="fp_expected"]{min-width:104px}
+table th[data-field="fp_received"],table td[data-field="fp_received"]{min-width:104px}
+table th[data-field="fp_date"],table td[data-field="fp_date"]{min-width:96px}
+table th[data-field="short_excess_payment"],table td[data-field="short_excess_payment"]{min-width:104px}
+table th[data-field="settlement_status"],table td[data-field="settlement_status"]{min-width:100px}
+table th[data-field="invoice_no"],table td[data-field="invoice_no"]{min-width:80px}
+table th[data-field="sap_document_date"],table td[data-field="sap_document_date"]{min-width:96px}
+table th[data-field="doc_invoice_date"],table td[data-field="doc_invoice_date"]{min-width:88px}
+table th[data-field="total_received"],table td[data-field="total_received"]{min-width:100px}
+table th[data-field="outstanding"],table td[data-field="outstanding"]{min-width:88px}
+table th[data-field="invoice_link"],table td[data-field="invoice_link"]{min-width:84px}
 td.left{text-align:left;font-weight:600}
-td.strong{font-weight:700;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:11px}
+td.strong{font-weight:700;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:10.5px}
 td.pos{color:#f9a8d4;font-weight:600}
 td.neg{color:#86efac;font-weight:600}
 td.zero{color:var(--dim)}
 td.status{text-align:center}
 .lbl-settled,.lbl-unsettled{
-  display:inline-block;min-width:96px;text-align:center;font-size:10px;font-weight:800;
-  letter-spacing:.7px;text-transform:uppercase;border-radius:999px;padding:4px 12px;line-height:1.2
+  display:inline-block;text-align:center;font-size:9.5px;font-weight:800;
+  letter-spacing:.6px;text-transform:uppercase;border-radius:999px;padding:3px 9px;line-height:1.15
 }
-.lbl-settled{background:#15803d;color:#fff;box-shadow:0 0 12px rgba(34,197,94,.45),inset 0 0 0 1px rgba(134,239,172,.35)}
+.lbl-settled{background:linear-gradient(135deg,#10b981 0%,#22c55e 100%);color:#fff;box-shadow:0 0 14px rgba(34,197,94,.55),inset 0 0 0 1px rgba(167,243,208,.55)}
 .lbl-unsettled{background:#f72585;color:#fff;box-shadow:0 0 12px rgba(247,37,133,.35)}
-td.date{text-align:center;color:var(--dim);font-size:11px}
+td.date{text-align:center;color:var(--dim);font-size:10.5px}
 tfoot td{
   font-weight:700;border-top:1px solid rgba(0,245,255,.12);background:rgba(0,245,255,.03);
-  position:sticky;bottom:0;padding:10px 13px;text-align:right;z-index:2;
-  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan)
+  position:sticky;bottom:0;padding:7px 8px;text-align:right;z-index:2;
+  font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--cyan)
 }
 tfoot td.left{text-align:left;font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase}
 
@@ -230,8 +269,8 @@ tfoot td.left{text-align:left;font-family:'Inter',sans-serif;font-size:10px;lett
 td.edit{background:rgba(0,245,255,.03);cursor:text}
 td.edit:hover{background:rgba(0,245,255,.05)}
 td.edit input{
-  width:100%;border:1px solid transparent;background:transparent;border-radius:6px;
-  padding:3px 6px;font:inherit;text-align:right;color:inherit;min-width:0
+  width:100%;border:1px solid transparent;background:transparent;border-radius:5px;
+  padding:2px 5px;font:inherit;text-align:right;color:inherit;min-width:0;font-size:11.5px
 }
 td.edit:hover input{border-color:rgba(0,245,255,.35)}
 td.edit input:focus{outline:none;border-color:rgba(0,245,255,.5);background:rgba(0,0,0,.35);box-shadow:0 0 0 3px rgba(0,245,255,.1)}
@@ -268,7 +307,9 @@ td.edit input[type=number],
 #detailTableDash tfoot td[data-field="sd_received"],
 #detailTableDash tfoot td[data-field="fp_expected"],
 #detailTableDash tfoot td[data-field="fp_received"]{padding-right:27px!important}
-td.edit input[type=date]{text-align:center;font-size:11px;width:116px}
+thead th.nosort{min-width:36px;width:36px}
+.row-actions{width:36px;padding:0 2px!important}
+.row-actions .rowedit,.row-actions .rowdel{padding:1px 4px}
 .rowdel{opacity:0;border:0;background:transparent;color:#475569;cursor:pointer;font-size:13px;padding:2px 6px;border-radius:6px;line-height:1}
 tr:hover .rowdel{opacity:1}
 .rowdel:hover{color:#f9a8d4;background:rgba(247,37,133,.15)}
