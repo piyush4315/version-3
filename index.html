@@ -1289,7 +1289,10 @@ function buildDataSheetXml(lots, customCols) {
           var st = settlementStatus(r);
           return '<c r="' + ref + '" t="str" s="' + (st === 'Settled' ? '18' : '19') + '"><f>' + escXml(f) + '</f><v>' + escXml(st) + '</v></c>';
         }
-        return cellFormula(ref, f, r[field], xlsxStyleFor(field, kind, false));
+        // Cached <v> must match the formula's ROUND(...) result so Excel shows
+        // the rounded value immediately on open (without waiting for F9).
+        var cached = MONEY_FIELDS.has(field) ? Math.round(numOr(r[field])) : numOr(r[field]);
+        return cellFormula(ref, f, cached, xlsxStyleFor(field, kind, false));
       }
       var nv = r[field];
       if (nv === null || nv === undefined || nv === '') {
@@ -1298,7 +1301,10 @@ function buildDataSheetXml(lots, customCols) {
       if ((field === 'sd_received' || field === 'fp_received') && Number(nv) === 0) {
         return '<c r="' + ref + '" s="' + xlsxStyleFor(field, kind, false) + '"/>';
       }
-      return cellNum(ref, nv, xlsxStyleFor(field, kind, false));
+      // Round money field values to whole rupee so the Excel sheet matches the
+      // display layer (and any formula referencing this cell gets a whole number).
+      var numOut = MONEY_FIELDS.has(field) ? Math.round(numOr(nv)) : numOr(nv);
+      return cellNum(ref, numOut, xlsxStyleFor(field, kind, false));
     }).join('');
     rows.push('<row r="' + rowN + '">' + cells + '</row>');
   });
@@ -1309,7 +1315,11 @@ function buildDataSheetXml(lots, customCols) {
     if (sumCols.indexOf(c[0]) !== -1 && lots.length) {
       var L = colLetter(i);
       var formula = 'SUM(' + L + firstData + ':' + L + lastData + ')';
-      return cellFormula(ref, formula, sumField(lots, c[0]), 17);
+      // Sum the already-rounded per-row values, then round the total to whole
+      // rupee for money fields. SUM-of-rounded == rounded SUM only if every row
+      // is already rounded, so this matches the on-screen footer.
+      var sumCached = MONEY_FIELDS.has(c[0]) ? Math.round(sumField(lots, c[0])) : sumField(lots, c[0]);
+      return cellFormula(ref, formula, sumCached, 17);
     }
     return '<c r="' + ref + '" s="16"/>';
   }).join('');
@@ -1377,13 +1387,13 @@ function buildRawDataSheetXml(lots) {
       cellInline('F' + n, r.unit || 'NO', 9) +
       cellInline('G' + n, 'Sold', 9) +
       cellNum('H' + n, r.rate, 10) +
-      cellFormula('I' + n, 'E' + n + '*H' + n, r.mat_value, 12);
+      cellFormula('I' + n, 'ROUND(E' + n + '*H' + n + ',0)', Math.round(numOr(r.mat_value)), 12);
     rows.push('<row r="' + n + '">' + cells + '</row>');
   });
   if (lots.length) {
     rows.push('<row r="' + tRow + '">' +
       cellInline('C' + tRow, 'TOTAL', 16) +
-      cellFormula('I' + tRow, 'SUM(I' + firstData + ':I' + lastData + ')', sumField(lots, 'mat_value'), 17) +
+      cellFormula('I' + tRow, 'SUM(I' + firstData + ':I' + lastData + ')', Math.round(sumField(lots, 'mat_value')), 17) +
       '</row>');
   }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
@@ -1421,19 +1431,29 @@ function buildWorkingSheetXml(lots) {
     var n = firstData + ri;
     var rate = numOr(r.gst_tds_rate);
     if (rate > 0 && rate < 1) rate = rate * 100;
+    // Money fields: round cached value to whole rupee so Excel shows the
+    // rounded number immediately (before the user presses F9 / saves).
+    var matC = Math.round(numOr(r.mat_value));
+    var gstC = Math.round(numOr(r.gst_tds));
+    var tricC = Math.round(numOr(r.total_receivables));
+    var sdeC = Math.round(numOr(r.sd_expected));
+    var sdrC = Math.round(numOr(r.sd_received));
+    var fpeC = Math.round(numOr(r.fp_expected));
+    var fprC = Math.round(numOr(r.fp_received));
+    var sepC = Math.round(numOr(r.short_excess_payment));
     var cells =
       cellNum('A' + n, r.lot_no, 10) +
       cellInline('B' + n, r.buyer, 9) +
-      cellNum('C' + n, r.mat_value, 12) +
-      cellFormula('D' + n, 'ROUND(C' + n + '*' + numXml(rate) + '%,0)', r.gst_tds, 12) +
-      cellFormula('E' + n, 'ROUND(C' + n + '*117.65%-D' + n + ',0)', r.total_receivables, 13) +
-      cellFormula('F' + n, 'ROUND(C' + n + '*25%,0)', r.sd_expected, 12) +
-      (r.sd_received === null || r.sd_received === undefined || r.sd_received === '' ? '<c r="G' + n + '" s="11"/>' : cellNum('G' + n, r.sd_received, 11)) +
+      cellNum('C' + n, matC, 12) +
+      cellFormula('D' + n, 'ROUND(C' + n + '*' + numXml(rate) + '%,0)', gstC, 12) +
+      cellFormula('E' + n, 'ROUND(C' + n + '*117.65%-D' + n + ',0)', tricC, 13) +
+      cellFormula('F' + n, 'ROUND(C' + n + '*25%,0)', sdeC, 12) +
+      (r.sd_received === null || r.sd_received === undefined || r.sd_received === '' ? '<c r="G' + n + '" s="11"/>' : cellNum('G' + n, sdrC, 11)) +
       (r.sd_date ? cellInline('H' + n, r.sd_date, 9) : '<c r="H' + n + '" s="9"/>') +
-      cellFormula('I' + n, 'ROUND(C' + n + '*92.65%-D' + n + ',0)', r.fp_expected, 12) +
-      (r.fp_received === null || r.fp_received === undefined || r.fp_received === '' ? '<c r="J' + n + '" s="11"/>' : cellNum('J' + n, r.fp_received, 11)) +
+      cellFormula('I' + n, 'ROUND(C' + n + '*92.65%-D' + n + ',0)', fpeC, 12) +
+      (r.fp_received === null || r.fp_received === undefined || r.fp_received === '' ? '<c r="J' + n + '" s="11"/>' : cellNum('J' + n, fprC, 11)) +
       (r.fp_date ? cellInline('K' + n, r.fp_date, 9) : '<c r="K' + n + '" s="9"/>') +
-      cellFormula('L' + n, 'ROUND(E' + n + '-G' + n + '-J' + n + ',0)', r.short_excess_payment, 13) +
+      cellFormula('L' + n, 'ROUND(E' + n + '-G' + n + '-J' + n + ',0)', sepC, 13) +
       (function () {
         var st = settlementStatus(r);
         return '<c r="M' + n + '" t="str" s="' + (st === 'Settled' ? '18' : '19') + '"><f>IF(L' + n + '&lt;=5,"Settled","Unsettled")</f><v>' + escXml(st) + '</v></c>';
@@ -1443,14 +1463,14 @@ function buildWorkingSheetXml(lots) {
   if (lots.length) {
     rows.push('<row r="' + tRow + '">' +
       cellInline('B' + tRow, 'TOTAL', 16) +
-      cellFormula('C' + tRow, 'SUM(C' + firstData + ':C' + lastData + ')', sumField(lots, 'mat_value'), 17) +
-      cellFormula('D' + tRow, 'SUM(D' + firstData + ':D' + lastData + ')', sumField(lots, 'gst_tds'), 17) +
-      cellFormula('E' + tRow, 'SUM(E' + firstData + ':E' + lastData + ')', sumField(lots, 'total_receivables'), 17) +
-      cellFormula('F' + tRow, 'SUM(F' + firstData + ':F' + lastData + ')', sumField(lots, 'sd_expected'), 17) +
-      cellFormula('G' + tRow, 'SUM(G' + firstData + ':G' + lastData + ')', sumField(lots, 'sd_received'), 17) +
-      cellFormula('I' + tRow, 'SUM(I' + firstData + ':I' + lastData + ')', sumField(lots, 'fp_expected'), 17) +
-      cellFormula('J' + tRow, 'SUM(J' + firstData + ':J' + lastData + ')', sumField(lots, 'fp_received'), 17) +
-      cellFormula('L' + tRow, 'SUM(L' + firstData + ':L' + lastData + ')', sumField(lots, 'short_excess_payment'), 17) +
+      cellFormula('C' + tRow, 'SUM(C' + firstData + ':C' + lastData + ')', Math.round(sumField(lots, 'mat_value')), 17) +
+      cellFormula('D' + tRow, 'SUM(D' + firstData + ':D' + lastData + ')', Math.round(sumField(lots, 'gst_tds')), 17) +
+      cellFormula('E' + tRow, 'SUM(E' + firstData + ':E' + lastData + ')', Math.round(sumField(lots, 'total_receivables')), 17) +
+      cellFormula('F' + tRow, 'SUM(F' + firstData + ':F' + lastData + ')', Math.round(sumField(lots, 'sd_expected')), 17) +
+      cellFormula('G' + tRow, 'SUM(G' + firstData + ':G' + lastData + ')', Math.round(sumField(lots, 'sd_received')), 17) +
+      cellFormula('I' + tRow, 'SUM(I' + firstData + ':I' + lastData + ')', Math.round(sumField(lots, 'fp_expected')), 17) +
+      cellFormula('J' + tRow, 'SUM(J' + firstData + ':J' + lastData + ')', Math.round(sumField(lots, 'fp_received')), 17) +
+      cellFormula('L' + tRow, 'SUM(L' + firstData + ':L' + lastData + ')', Math.round(sumField(lots, 'short_excess_payment')), 17) +
       '</row>');
   }
   return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
