@@ -3427,12 +3427,20 @@ function renderPivot() {
      so M I SCRAP TRADERS / S M ENTERPRISES (and any other Unsettled buyer
      whose total_receivables falls between two Settled buyers) never ends up
      in the middle of the table. Within each block the previous order
-     (user-chosen sort, or tric desc by default) is preserved. */
+     (user-chosen sort, or tric desc by default) is preserved.
+     Bucket membership for a grouped row is derived from its underlying LOTS
+     (the per-lot settlementStatus rollup), not from the aggregated outstanding
+     sum — so a buyer is "Settled" iff every one of their lots is settled,
+     and "Unsettled" if any single lot is unsettled. This keeps the row
+     consistent with the breakdown chip shown in the Settled / Unsettled
+     column. */
   var grpPinnedTop = (ui.settlement === 'Settled' || ui.settlement === 'Unsettled') ? ui.settlement : null;
   if (grpPinnedTop) {
     pivotRows = pivotRows.slice().sort(function (a, b) {
-      var aTop = numOr(a.outstanding) <= SETTLEMENT_TOLERANCE ? 0 : 1;
-      var bTop = numOr(b.outstanding) <= SETTLEMENT_TOLERANCE ? 0 : 1;
+      /* Fetch status from the buyer's individual lots (r.unsettled > 0 means
+         at least one lot is Unsettled -> the buyer is Unsettled). */
+      var aTop = numOr(a.unsettled) > 0 ? 1 : 0;
+      var bTop = numOr(b.unsettled) > 0 ? 1 : 0;
       if (aTop !== bTop) {
         if (grpPinnedTop === 'Settled') return aTop - bTop;
         return bTop - aTop;
@@ -3447,7 +3455,11 @@ function renderPivot() {
     '</th>' + metricKeys.map(function (f, i) { return thPickerHtml(f, 'pivot', i, 'pivotMetric'); }).join('') + '</tr>';
   tbody.innerHTML = pivotRows.map(function (r) {
     var isSelected = selectedGroup && selectedGroup.groupKey === groupKey && selectedGroup.value === r.key;
-    return '<tr class="' + (isSelected ? 'selected' : '') + (numOr(r.outstanding) <= SETTLEMENT_TOLERANCE ? ' settled' : '') + '" data-group="' + groupKey + '" data-value="' + encodeURIComponent(r.key) + '">' +
+    /* Row's "settled" class is driven by the lot breakdown: a buyer row is
+       visually Settled iff every one of its lots is settled (r.unsettled == 0).
+       This keeps the row colour in sync with the breakdown chip. */
+    var rowSettled = numOr(r.unsettled) === 0;
+    return '<tr class="' + (isSelected ? 'selected' : '') + (rowSettled ? ' settled' : '') + '" data-group="' + groupKey + '" data-value="' + encodeURIComponent(r.key) + '">' +
       '<td class="left">' + escHtml(r.key) + '</td>' +
       metricKeys.map(function (f) {
         if (f === 'lots') return '<td>' + r.lots + '</td>';
