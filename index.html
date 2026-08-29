@@ -2942,9 +2942,14 @@ function confirmModal(title, msg, yesLabel, onYes, danger) {
 /* ---------------- filters ---------------- */
 function dashFilteredRows() {
   var q = ui.dashSearch.trim().toLowerCase();
+  /* In 2-bucket Settlement view, the filter selects one bucket and the
+     pivot pins it to the top; the opposite bucket must still be visible
+     (pinned to the bottom). So we don't filter rows out for 'Settled' /
+     'Unsettled' — only for the single-bucket buckets. */
+  var twoBucket = ui.settlement === 'Settled' || ui.settlement === 'Unsettled';
   return lots.filter(function (r) {
     if (ui.auction !== 'all' && String(r.auction) !== ui.auction) return false;
-    if (ui.settlement !== 'all' && settlementGroups(r).indexOf(ui.settlement) === -1) return false;
+    if (ui.settlement !== 'all' && !twoBucket && settlementGroups(r).indexOf(ui.settlement) === -1) return false;
     if (q) {
       var hay = (r.buyer + ' ' + r.lot_no + ' ' + r.lot_name + ' ' + r.auction).toLowerCase();
       if (hay.indexOf(q) === -1) return false;
@@ -3223,7 +3228,9 @@ function renderPivot() {
   var tfoot = document.querySelector('#pivotTable tfoot');
   document.getElementById('pivotHint').textContent = groupKey === 'default'
     ? 'Default cash-receivables view — one row per lot. Click a buyer/row to show every lot of that buyer below. Click a column header to sort. Use ▾ on a header to pick which field sits in that column.'
-    : 'Click a buyer (or any group row) to show all of its lots below on this page. Click again to clear. Click a column header to sort. Use ▾ on a header to pick which metric sits in that column.';
+    : (groupKey === 'settlement_group' && (ui.settlement === 'Settled' || ui.settlement === 'Unsettled')
+      ? 'Status = ' + ui.settlement + ': every lot is shown, with the selected bucket pinned to the top and the opposite bucket pinned to the bottom. Click a row to drill down.'
+      : 'Click a buyer (or any group row) to show all of its lots below on this page. Click again to clear. Click a column header to sort. Use ▾ on a header to pick which metric sits in that column.');
 
   if (groupKey === 'default') {
     var cols = pivotLotCols();
@@ -3273,17 +3280,43 @@ function renderPivot() {
 
   var metricKeys = pivotMetricCols();
   var groups = {};
-  var keyExtractor = (groupKey === 'settlement_group')
-    ? function (r) { return settlementGroups(r); }
-    : function (r) { return [r[groupKey] === null || r[groupKey] === undefined ? '(blank)' : String(r[groupKey])]; };
+  /* For Settlement-group view, the Status filter may force a 2-bucket
+     layout: when the user picks 'Settled' or 'Unsettled', every lot
+     falls into either the selected bucket (pinned to the top) or the
+     opposite bucket (pinned to the bottom). The other 3 buckets are
+     hidden in that mode. */
+  var isSettlementView = (groupKey === 'settlement_group');
+  var twoBucketFilter = isSettlementView && (ui.settlement === 'Settled' || ui.settlement === 'Unsettled');
+  var pinnedBucket = twoBucketFilter ? ui.settlement : null;
+  var pinnedOrder = twoBucketFilter ? (ui.settlement === 'Settled' ? ['Settled', 'Unsettled'] : ['Unsettled', 'Settled']) : null;
+
+  function bucketFor(r) {
+    if (twoBucketFilter) {
+      return [Math.abs(numOr(r && r.outstanding)) <= 1 ? pinnedBucket : (pinnedBucket === 'Settled' ? 'Unsettled' : 'Settled')];
+    }
+    if (isSettlementView) {
+      if (ui.settlement !== 'all' && (ui.settlement === 'Partially Settled' || ui.settlement === 'Only Settled' || ui.settlement === 'Only Unsettled')) {
+        /* In single-bucket mode, a lot only appears under the bucket the
+           user filtered to — no double-counting into the parent 'Unsettled'
+           or 'Settled' row. */
+        return settlementGroups(r).indexOf(ui.settlement) === -1 ? [] : [ui.settlement];
+      }
+      return settlementGroups(r);
+    }
+    return [r[groupKey] === null || r[groupKey] === undefined ? '(blank)' : String(r[groupKey])];
+  }
   rows.forEach(function (r) {
-    var keys = keyExtractor(r);
+    var keys = bucketFor(r);
     for (var ki = 0; ki < keys.length; ki++) {
       var key = keys[ki];
       (groups[key] = groups[key] || []).push(r);
     }
   });
-  if (groupKey === 'settlement_group') {
+  if (twoBucketFilter) {
+    var two = {};
+    pinnedOrder.forEach(function (k) { if (groups[k]) two[k] = groups[k]; });
+    groups = two;
+  } else if (isSettlementView) {
     /* Always show the five buckets in the same left-to-right order so the
        pivot is predictable regardless of which lots are present. */
     var ORDER = ['Settled', 'Only Settled', 'Partially Settled', 'Unsettled', 'Only Unsettled'];
