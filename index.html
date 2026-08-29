@@ -246,6 +246,12 @@ table th[data-field="doc_invoice_date"],table td[data-field="doc_invoice_date"]{
 table th[data-field="total_received"],table td[data-field="total_received"]{min-width:100px}
 table th[data-field="outstanding"],table td[data-field="outstanding"]{min-width:88px}
 table th[data-field="invoice_link"],table td[data-field="invoice_link"]{min-width:84px}
+table th[data-field="settled_breakdown"],table td[data-field="settled_breakdown"]{min-width:120px}
+.settled-counts{display:inline-flex;align-items:center;gap:4px;justify-content:flex-end;width:100%}
+.settled-counts .seg{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;border-radius:999px;padding:2px 7px;line-height:1.1}
+.settled-counts .seg.s{background:linear-gradient(135deg,#10b981 0%,#22c55e 100%);color:#fff;box-shadow:0 0 10px rgba(34,197,94,.5)}
+.settled-counts .seg.u{background:#f72585;color:#fff;box-shadow:0 0 8px rgba(247,37,133,.35)}
+.settled-counts .seg.zero{opacity:.4;background:rgba(255,255,255,.08);color:var(--dim);box-shadow:none}
 td.left{text-align:left;font-weight:600}
 td.strong{font-weight:700;color:var(--cyan);font-family:'JetBrains Mono',monospace;font-size:10.5px}
 td.pos{color:#f9a8d4;font-weight:600}
@@ -2597,8 +2603,8 @@ var pendingImportCustom = [];
 /* Detail columns follow Final Calculation Sheet order, then app-only receipt totals/actions. */
 var DEFAULT_DETAIL_KEYS = ['qty','lot_name','rate','auction','unit','lot_no','buyer','mat_value','gst','mat_value_plus_gst','tcs','tds194o','service_charge_mstc','tds194h','net_service_charge','service_charge_to_mstc','gst_tds_rate','gst_tds','total_receivables','sd_expected','sd_received','sd_date','fp_expected','fp_received','fp_date','short_excess_payment','settlement_status','invoice_no','sap_document_date','doc_invoice_date','total_received','outstanding','invoice_link'];
 /* Invoice No. is intentionally available only in Lot Details, not Pivot Analytics. */
-var DEFAULT_PIVOT_LOT_KEYS = ['lot_no','buyer','total_receivables','sd_expected','sd_received','sd_date','fp_expected','fp_received','fp_date','outstanding'];
-var DEFAULT_PIVOT_METRIC_KEYS = ['lots','mat_value','gst','tcs','total_receivables','sd_expected','sd_received','fp_expected','fp_received','total_received','outstanding'];
+var DEFAULT_PIVOT_LOT_KEYS = ['lot_no','buyer','total_receivables','sd_expected','sd_received','sd_date','fp_expected','fp_received','fp_date','outstanding','settlement_status'];
+var DEFAULT_PIVOT_METRIC_KEYS = ['lots','mat_value','gst','tcs','total_receivables','sd_expected','sd_received','fp_expected','fp_received','total_received','outstanding','settled_breakdown'];
 var colLayout = {
   detail: DEFAULT_DETAIL_KEYS.slice(),
   pivotLot: DEFAULT_PIVOT_LOT_KEYS.slice(),
@@ -2624,6 +2630,13 @@ function ensureGstTdsRateColumn() {
     var si = colLayout.detail.indexOf('short_excess_payment');
     if (si >= 0) colLayout.detail.splice(si + 1, 0, 'settlement_status');
     else colLayout.detail.push('settlement_status');
+  }
+  /* Auto-add Settled / Unsettled to Pivot Analytics (default lot-wise view) for users with old saved layouts */
+  if (colLayout.pivotLot && colLayout.pivotLot.indexOf('settlement_status') === -1) {
+    colLayout.pivotLot.push('settlement_status');
+  }
+  if (colLayout.pivotMetric && colLayout.pivotMetric.indexOf('settled_breakdown') === -1) {
+    colLayout.pivotMetric.push('settled_breakdown');
   }
 }
 
@@ -3003,7 +3016,8 @@ var FIELD_META = {
   total_received: { label: 'Total Received', kind: 'strong', sum: true },
   outstanding: { label: 'Outstanding', kind: '', sum: true },
   invoice_link: { label: 'Invoice link', kind: 'left', sum: false },
-  lots: { label: 'Lots', kind: '', sum: true }
+  lots: { label: 'Lots', kind: '', sum: true },
+  settled_breakdown: { label: 'Settled / Unsettled', kind: 'status', sum: false }
 };
 function customColById(id) {
   for (var i = 0; i < customCols.length; i++) if (customCols[i].id === id) return customCols[i];
@@ -3216,8 +3230,15 @@ function renderPivot() {
   var pivotRows = Object.keys(groups).map(function (key) {
     var grp = groups[key];
     var out = { key: key, lots: grp.length };
+    // pre-compute settled/unsettled counts so the metric view can show both at a glance
+    var sCount = 0, uCount = 0;
+    for (var gi = 0; gi < grp.length; gi++) {
+      if (settlementStatus(grp[gi]) === 'Settled') sCount++; else uCount++;
+    }
+    out.settled = sCount; out.unsettled = uCount;
     metricKeys.forEach(function (f) {
       if (f === 'lots') return;
+      if (f === 'settled_breakdown') { out[f] = sCount; return; }
       if (isCustomField(f)) {
         out[f] = grp.reduce(function (a, r) { return a + numOr(getLotField(r, f)); }, 0);
       } else {
@@ -3243,6 +3264,12 @@ function renderPivot() {
       '<td class="left">' + escHtml(r.key) + '</td>' +
       metricKeys.map(function (f) {
         if (f === 'lots') return '<td>' + r.lots + '</td>';
+        if (f === 'settled_breakdown') {
+          return '<td class="status" data-field="settled_breakdown"><span class="settled-counts" title="Settled ' + r.settled + ' / Unsettled ' + r.unsettled + ' of ' + r.lots + ' lots">' +
+            '<span class="seg s' + (r.settled === 0 ? ' zero' : '') + '">' + r.settled + ' S</span>' +
+            '<span class="seg u' + (r.unsettled === 0 ? ' zero' : '') + '">' + r.unsettled + ' U</span>' +
+          '</span></td>';
+        }
         var v = r[f];
         var cls = f === 'total_receivables' || f === 'total_received' ? 'strong' : (f === 'outstanding' ? (v > 1 ? 'pos' : (v < -1 ? 'neg' : 'zero')) : '');
         return '<td class="' + cls + '">' + inr(v) + '</td>';
@@ -3250,6 +3277,14 @@ function renderPivot() {
   }).join('');
   tfoot.innerHTML = '<tr><td class="left">Total (' + pivotRows.length + ' ' + groupLabel.toLowerCase() + 's)</td>' + metricKeys.map(function (f) {
     if (f === 'lots') return '<td>' + pivotRows.reduce(function (a, r) { return a + r.lots; }, 0) + '</td>';
+    if (f === 'settled_breakdown') {
+      var ts = pivotRows.reduce(function (a, r) { return a + r.settled; }, 0);
+      var tu = pivotRows.reduce(function (a, r) { return a + r.unsettled; }, 0);
+      return '<td class="status" data-field="settled_breakdown"><span class="settled-counts">' +
+        '<span class="seg s' + (ts === 0 ? ' zero' : '') + '">' + ts + ' S</span>' +
+        '<span class="seg u' + (tu === 0 ? ' zero' : '') + '">' + tu + ' U</span>' +
+      '</span></td>';
+    }
     return '<td>' + inr(sumField(pivotRows, f)) + '</td>';
   }).join('') + '</tr>';
   tbody.querySelectorAll('tr').forEach(function (tr) {
