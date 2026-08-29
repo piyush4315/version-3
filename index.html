@@ -735,7 +735,7 @@ tbody tr.drill-target{outline:2px solid rgba(124,58,237,.55);outline-offset:-2px
     </main>
     <footer class="app-foot">
       <div><span class="dot" id="saveDot"></span><span id="saveState">Autosave on</span></div>
-      <div>Single-file SaaS · v2.1 · Undo/Redo: 10 steps</div>
+      <div>Single-file SaaS · v2.1 · Rounded to whole ₹ · Undo/Redo: 10 steps</div>
     </footer>
   </div>
 </div>
@@ -812,8 +812,21 @@ function fromISODate(iso) {
    outstanding         = total_receivables - total_received
    gst_tds (auto when >0) = round(gst / 9)               (TDS on GST)                                        */
 var NUM_FIELDS = ['qty','rate','mat_value','mat_value_plus_gst','gst','tcs','service_charge_mstc','tds194h','net_service_charge','service_charge_to_mstc','tds194o','gst_tds_rate','gst_tds','total_receivables','sd_expected','sd_received','fp_expected','fp_received','short_excess_payment','total_received','outstanding'];
+/* Rounding rule: every money field (₹ amount) is shown and exported rounded to the
+   nearest whole rupee. qty, rate and gst_tds_rate are NOT in this set — qty and
+   rate can be fractional (8.2 MT, 27.094 €/kg) and gst_tds_rate is a percentage
+   that needs 2 decimal places. The "tol" suffix tracks the tolerance row's
+   parent (outstanding → tolerance is whole-rupee) and short_excess_payment
+   mirrors outstanding. */
+var MONEY_FIELDS = new Set(['mat_value','mat_value_plus_gst','gst','tcs','service_charge_mstc','tds194h','net_service_charge','service_charge_to_mstc','tds194o','gst_tds','total_receivables','sd_expected','sd_received','fp_expected','fp_received','short_excess_payment','total_received','outstanding']);
 var DATE_FIELDS = ['sd_date','fp_date','sap_document_date','doc_invoice_date'];
 var EDITABLE_FIELDS = ['gst_tds_rate','gst_tds','sd_expected','sd_received','sd_date','fp_expected','fp_received','fp_date'];
+/* Display helper: force 0 decimals for money fields, 2 for percentages, 2 for
+   pure numbers that aren't whole-rupee (kept for any legacy callers). Used
+   in place of `inr(x, Number.isInteger(x) ? 0 : 2)` everywhere a money cell
+   is rendered. */
+function moneyFmt(v) { return inr(v, 0); }
+function numFmt(v) { return inr(v, Number.isInteger(v) ? 0 : 2); }
 
 function cleanNum(v) {
   if (typeof v === 'string') {
@@ -1164,12 +1177,12 @@ var XLSX_COLS = [
   ['buyer', 'Buyer', 's'],
   ['mat_value', 'Mat. Value', 'n'],
   ['gst', 'GST', 'f:ROUND(H{r}*18%,0)'],
-  ['mat_value_plus_gst', 'Mat. Value + GST', 'f:+H{r}+I{r}'],
+  ['mat_value_plus_gst', 'Mat. Value + GST', 'f:ROUND(+H{r}+I{r},0)'],
   ['tcs', 'TCS', 'f:ROUND((H{r}+I{r})*2%,0)'],
-  ['tds194o', 'TDS u/s 194(O)', 'f:H{r}*0.1%'],
-  ['service_charge_mstc', 'Service Charge\nto MSTC', 'f:H{r}*2.25%*118%'],
-  ['tds194h', 'TDS u/s 194(H)', 'f:H{r}*2.25%*2%'],
-  ['net_service_charge', 'Net Service Charge\n(post TDS 194H)', 'f:M{r}-N{r}'],
+  ['tds194o', 'TDS u/s 194(O)', 'f:ROUND(H{r}*0.1%,0)'],
+  ['service_charge_mstc', 'Service Charge\nto MSTC', 'f:ROUND(H{r}*2.25%*118%,0)'],
+  ['tds194h', 'TDS u/s 194(H)', 'f:ROUND(H{r}*2.25%*2%,0)'],
+  ['net_service_charge', 'Net Service Charge\n(post TDS 194H)', 'f:ROUND(M{r}-N{r},0)'],
   ['service_charge_to_mstc', 'Service charge to MSTC', 'f:ROUND(O{r}+L{r},0)'],
   ['gst_tds_rate', 'GST TDS Rate', 'pct'],
   ['gst_tds', 'GST TDS', 'f:ROUND(H{r}*Q{r},0)'],
@@ -1180,7 +1193,7 @@ var XLSX_COLS = [
   ['fp_expected', 'Final Payment (Expected)', 'f:ROUND(H{r}*92.65%-R{r},0)'],
   ['fp_received', 'Final Payment (Received)', 'n'],
   ['fp_date', 'Date of Receipt', 's'],
-  ['short_excess_payment', 'Short/(Excess) Payment', 'f:+S{r}-U{r}-X{r}'],
+  ['short_excess_payment', 'Short/(Excess) Payment', 'f:ROUND(+S{r}-U{r}-X{r},0)'],
   ['settlement_status', 'Settled / Unsettled', 'f:IF(Z{r}<=5,"Settled","Unsettled")'],
   ['invoice_no', 'Invoice No. ', 's'],
   ['sap_document_date', 'SAP Document', 's'],
@@ -1420,7 +1433,7 @@ function buildWorkingSheetXml(lots) {
       cellFormula('I' + n, 'ROUND(C' + n + '*92.65%-D' + n + ',0)', r.fp_expected, 12) +
       (r.fp_received === null || r.fp_received === undefined || r.fp_received === '' ? '<c r="J' + n + '" s="11"/>' : cellNum('J' + n, r.fp_received, 11)) +
       (r.fp_date ? cellInline('K' + n, r.fp_date, 9) : '<c r="K' + n + '" s="9"/>') +
-      cellFormula('L' + n, 'E' + n + '-G' + n + '-J' + n, r.short_excess_payment, 13) +
+      cellFormula('L' + n, 'ROUND(E' + n + '-G' + n + '-J' + n + ',0)', r.short_excess_payment, 13) +
       (function () {
         var st = settlementStatus(r);
         return '<c r="M' + n + '" t="str" s="' + (st === 'Settled' ? '18' : '19') + '"><f>IF(L' + n + '&lt;=5,"Settled","Unsettled")</f><v>' + escXml(st) + '</v></c>';
@@ -2172,7 +2185,7 @@ function txtExport(lots, customCols) {
     if (f.indexOf('_extra:') === 0) return strOr(r._extra && r._extra[f.slice(7)]).slice(0, 30);
     if (f === 'sd_date' || f === 'fp_date') return r[f] || '';
     if (f === 'lot_no') return String(r[f]);
-    return inr(numOr(r[f]), Number.isInteger(numOr(r[f])) ? 0 : 2);
+    return moneyFmt(numOr(r[f]));
   }
   COLS.forEach(function (c) {
     if (c[0] === 'buyer') return;
@@ -2331,7 +2344,7 @@ function htmlExport(lots, customCols) {
       var disp;
       if (f === 'sd_date' || f === 'fp_date' || f === 'doc_invoice_date') disp = v ? escHtml(v) : '—';
       else if (f === 'lot_no' || f === 'auction' || f === 'sap_document_date') disp = escHtml(v);
-      else if (typeof v === 'number') disp = inr(v, Number.isInteger(v) ? 0 : 2);
+      else if (typeof v === 'number') disp = MONEY_FIELDS.has(f) ? moneyFmt(v) : numFmt(v);
       else disp = escHtml(v);
       return '<td class="' + cls + '">' + disp + '</td>';
     });
@@ -2345,7 +2358,7 @@ function htmlExport(lots, customCols) {
       var meta = FIELD_META[f];
       if (!meta || !meta.sum) return '<td></td>';
       var s = sumField(lots, f);
-      return '<td class="num strong">' + inr(s, Number.isInteger(s) ? 0 : 2) + '</td>';
+      return '<td class="num strong">' + (MONEY_FIELDS.has(f) ? moneyFmt(s) : numFmt(s)) + '</td>';
     }).join('') +
     customCols.map(function () { return '<td></td>'; }).join('') + '</tr>';
   var headCells = EXPORT_COLS.map(function (c) {
@@ -2482,7 +2495,7 @@ function buildPDF(lots) {
       if (f === 'sd_date' || f === 'fp_date') { t = v || '-'; col = '0.45 0.52 0.62 rg'; }
       else if (f === 'buyer') { t = truncForPdf(strOr(r.buyer), FONT, cx.w - 8); col = '0.1 0.14 0.22 rg'; }
       else if (f === 'lot_no') { t = String(r[f]); col = '0.16 0.22 0.33 rg'; }
-      else { t = inr(numOr(v), Number.isInteger(numOr(v)) ? 0 : 2); col = '0.16 0.22 0.33 rg'; }
+      else { t = (MONEY_FIELDS.has(f) ? moneyFmt : numFmt)(numOr(v)); col = '0.16 0.22 0.33 rg'; }
       if (f === 'outstanding') col = numOr(v) > 1 ? '0.72 0.11 0.11 rg' : (numOr(v) < -1 ? '0.08 0.5 0.24 rg' : '0.55 0.6 0.68 rg');
       if (cx.align === 'l') tx = cx.x + 4;
       else if (cx.align === 'c') tx = cx.x + (cx.w - pdfTextWidth(t, FONT)) / 2;
@@ -3203,13 +3216,13 @@ function formatCellValue(r, key) {
   if (kind === 'left' || kind === 'edit-text') return escHtml(v === null || v === undefined ? '' : v);
   if (typeof v === 'number' || (v !== '' && v !== null && v !== undefined && isFiniteNum(Number(v)) && !isCustomField(key))) {
     var n = typeof v === 'number' ? v : Number(v);
-    return inr(n, Number.isInteger(n) ? 0 : 2);
+    return MONEY_FIELDS.has(key) ? moneyFmt(n) : numFmt(n);
   }
   if (isCustomField(key)) {
     var c = customColById(key);
     if (c && c.type === 'number') {
       var nn = Number(v);
-      return (v === '' || v === null || v === undefined || isNaN(nn)) ? '—' : inr(nn, Number.isInteger(nn) ? 0 : 2);
+      return (v === '' || v === null || v === undefined || isNaN(nn)) ? '—' : moneyFmt(nn);
     }
     return escHtml(v === null || v === undefined || v === '' ? '—' : v);
   }
@@ -3261,7 +3274,7 @@ function renderPivot() {
       var meta = FIELD_META[f];
       if (meta && meta.sum) {
         var s = sumField(dRows, f);
-        return '<td>' + inr(s, Number.isInteger(s) ? 0 : 2) + '</td>';
+        return '<td>' + (MONEY_FIELDS.has(f) ? moneyFmt(s) : numFmt(s)) + '</td>';
       }
       return '<td></td>';
     }).join('') + '</tr>';
@@ -3531,7 +3544,7 @@ function renderDetailInto(tableId, countId) {
     if (numericFields.indexOf(f) !== -1 || (custom && custom.type === 'number')) {
       var s = rows.reduce(function (a, r) { return a + numOr(getLotField(r, f)); }, 0);
       var cls = f === 'outstanding' ? ((s > 1 ? 'pos' : (s < -1 ? 'neg' : 'zero'))) : (fieldKind(f) === 'strong' ? 'strong' : '');
-      return '<td class="' + cls + '" data-field="' + escHtml(f) + '">' + inr(s, Number.isInteger(s) ? 0 : 2) + '</td>';
+      return '<td class="' + cls + '" data-field="' + escHtml(f) + '">' + (MONEY_FIELDS.has(f) ? moneyFmt(s) : numFmt(s)) + '</td>';
     }
     return '<td></td>';
   }).join('') + '<td></td></tr>';
@@ -3764,7 +3777,7 @@ function renderDetailFooter() {
       if (numericFields.indexOf(f) !== -1 || (custom && custom.type === 'number')) {
         var s = rows.reduce(function (a, r) { return a + numOr(getLotField(r, f)); }, 0);
         var cls = f === 'outstanding' ? ((s > 1 ? 'pos' : (s < -1 ? 'neg' : 'zero'))) : (fieldKind(f) === 'strong' ? 'strong' : '');
-        return '<td class="' + cls + '" data-field="' + escHtml(f) + '">' + inr(s, Number.isInteger(s) ? 0 : 2) + '</td>';
+        return '<td class="' + cls + '" data-field="' + escHtml(f) + '">' + (MONEY_FIELDS.has(f) ? moneyFmt(s) : numFmt(s)) + '</td>';
       }
       return '<td></td>';
     }).join('') + '<td></td></tr>';
@@ -3807,7 +3820,7 @@ function refreshDerivedDOM(lotIdx) {
         td.innerHTML = settlementLabelHtml(r);
         td.className = 'status';
       } else {
-        td.textContent = inr(v, Number.isInteger(v) ? 0 : 2);
+        td.textContent = moneyFmt(v);
         var base = f === 'total_receivables' || f === 'total_received' ? 'strong' : (f === 'outstanding' || f === 'short_excess_payment' ? (v > 1 ? 'pos' : (v < -1 ? 'neg' : 'zero')) : '');
         td.className = base;
       }
