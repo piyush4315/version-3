@@ -3414,7 +3414,27 @@ function renderPivot() {
       pivotRows = sortRows(pivotRows, 'key', sortState.dir);
     }
   } else {
-    pivotRows = sortRows(pivotRows, metricKeys.indexOf('total_receivables') !== -1 ? 'total_receivables' : metricKeys[0], -1);
+    /* Default sort = total_receivables desc. But when the Status filter
+       is 2-bucket ('Settled' or 'Unsettled') and the user is in a
+       non-settlement group view (Buyer / Auction / Material type / Unit),
+       also pin the selected bucket to the top and the opposite bucket to
+       the bottom so Unsettled buyers (e.g. M I SCRAP TRADERS, S M
+       ENTERPRISES) don't get mixed into the middle of the table just
+       because their total_receivables falls between two settled buyers. */
+    var grpPinnedTop = (ui.settlement === 'Settled' || ui.settlement === 'Unsettled') ? ui.settlement : null;
+    var defSortKey = metricKeys.indexOf('total_receivables') !== -1 ? 'total_receivables' : metricKeys[0];
+    pivotRows = sortRows(pivotRows, defSortKey, -1);
+    if (grpPinnedTop) {
+      pivotRows = pivotRows.slice().sort(function (a, b) {
+        var aTop = numOr(a.outstanding) <= SETTLEMENT_TOLERANCE ? 0 : 1;
+        var bTop = numOr(b.outstanding) <= SETTLEMENT_TOLERANCE ? 0 : 1;
+        if (aTop !== bTop) {
+          if (grpPinnedTop === 'Settled') return aTop - bTop;
+          return bTop - aTop;
+        }
+        return numOr(b[defSortKey]) - numOr(a[defSortKey]);
+      });
+    }
   }
   var groupLabel = { buyer: 'Buyer', auction: 'Auction', lot_name: 'Material type', unit: 'Unit', settlement_group: 'Settlement group' }[groupKey];
   thead.innerHTML = '<tr><th class="left" data-field="key" data-table="pivot">' + escHtml(groupLabel) +
